@@ -9,9 +9,9 @@ namespace MongoDBMigrations.SmokeTests.Migrations
 
         public string Name => "Changing type of age type";
 
-        public void Down(IMongoDatabase database)
+        public void Down(MigrationContext context)
         {
-            var collection = database.GetCollection<BsonDocument>("clients");
+            var collection = context.Database.GetCollection<BsonDocument>("clients");
             var list = collection.Find(FilterDefinition<BsonDocument>.Empty).ToList();
             FieldDefinition<BsonDocument, int> fieldDefenition = "age";
             foreach (var item in list)
@@ -21,9 +21,9 @@ namespace MongoDBMigrations.SmokeTests.Migrations
             }
         }
 
-        public void Up(IMongoDatabase database)
+        public void Up(MigrationContext context)
         {
-            var collection = database.GetCollection<BsonDocument>("clients");
+            var collection = context.Database.GetCollection<BsonDocument>("clients");
             var list = collection.Find(FilterDefinition<BsonDocument>.Empty).ToList();
             FieldDefinition<BsonDocument, string> fieldDefenition = "age";
             foreach (var item in list)

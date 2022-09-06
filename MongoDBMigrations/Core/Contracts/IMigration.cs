@@ -1,7 +1,19 @@
+using System.Threading;
 using MongoDB.Driver;
 
 namespace MongoDBMigrations
 {
+    public sealed class MigrationContext
+    {
+        public MigrationContext(IMongoDatabase database, IClientSessionHandle session, in CancellationToken token) {
+            Database = database;
+            Session = session;
+            CancellationToken = token;
+        }
+        public IMongoDatabase Database { get; }
+        public IClientSessionHandle Session { get; }
+        public CancellationToken CancellationToken { get; }
+    }
     public interface IMigration
     {
         /// <summary>
@@ -17,13 +29,13 @@ namespace MongoDBMigrations
         /// <summary>
         /// Roll forward method.
         /// </summary>
-        /// <param name="database">Instance of MongoDatabase</param>
-        void Up(IMongoDatabase database);
+        /// <param name="context">Migration context</param>
+        void Up(MigrationContext context);
 
         /// <summary>
         /// Roll back method.
         /// </summary>
-        /// <param name="database">Instance of MongoDatabase</param>
-        void Down(IMongoDatabase database);
+        /// <param name="context">Migration context</param>
+        void Down(MigrationContext context);
     }
 }
