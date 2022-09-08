@@ -120,8 +120,9 @@ namespace MongoDBMigrations
         /// </summary>
         /// <param name="migration">Migration instance.</param>
         /// <param name="isUp">True if roll forward otherwise roll back.</param>
+        /// <param name="transaction"></param>
         /// <returns>Applied migration.</returns>
-        internal SpecificationItem SaveMigration(IMigration migration, bool isUp)
+        internal SpecificationItem SaveMigration(IMigration migration, bool isUp, IClientSessionHandle transaction)
         {
             var appliedMigration = new SpecificationItem
             {
@@ -130,7 +131,7 @@ namespace MongoDBMigrations
                 isUp = isUp,
                 ApplyingDateTime = DateTime.UtcNow
             };
-            GetAppliedMigrations().InsertOne(appliedMigration);
+            GetAppliedMigrations().InsertOne(transaction, appliedMigration);
             return appliedMigration;
         }
     }

@@ -181,7 +181,7 @@ namespace MongoDBMigrations
                             else
                                 m.Down(context);
 
-                            var insertedMigration = _status.SaveMigration(m, isUp);
+                            var insertedMigration = _status.SaveMigration(m, isUp, transaction.Session);
 
                             increment.MigrationName = insertedMigration.Name;
                             increment.TargetVersion = insertedMigration.Ver;
