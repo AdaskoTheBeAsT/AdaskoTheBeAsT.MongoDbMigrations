@@ -162,7 +162,7 @@ namespace MongoDBMigrations
                 }
 
                 int counter = 0;
-                var session = _useTransaction ? (IMigrationSession) new MongoMigrationSession(_database.Client) : new DummyMigrationSession();
+                var session = _useTransaction ? (IMigrationSession) new MongoMigrationSession(_database.Client) : new SimpleMigrationSession();
                 
                 using (var transaction = session.BeginTransaction()) {
                     var context = new MigrationContext(_database, transaction.Session, _token);

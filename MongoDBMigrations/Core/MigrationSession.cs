@@ -4,11 +4,11 @@ using MongoDBMigrations.Core.Contracts;
 
 namespace MongoDBMigrations.Core
 {
-    public sealed class DummyMigrationSession : IMigrationSession
+    public sealed class SimpleMigrationSession : IMigrationSession
     {
-        public IMigrationTransaction BeginTransaction() => new DummyTransaction();
+        public IMigrationTransaction BeginTransaction() => new SimpleTransaction();
 
-        sealed class DummyTransaction : IMigrationTransaction
+        sealed class SimpleTransaction : IMigrationTransaction
         {
             public void Dispose() { }
             public IClientSessionHandle Session => null;
