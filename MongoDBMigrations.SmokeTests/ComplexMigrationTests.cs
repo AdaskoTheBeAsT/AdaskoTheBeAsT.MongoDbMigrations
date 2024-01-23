@@ -1,31 +1,32 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using System.Reflection;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
 namespace MongoDBMigrations.SmokeTests
 {
     [TestClass]
     public class ComplexMigrationTests
     {
-        private readonly MongoDaemon _daemon;
-
-        public ComplexMigrationTests()
-        {
-            _daemon = new MongoDaemon();
-        }
-
+        MongoDaemon.ConnectionInfo _daemon;
+        
         [TestInitialize]
-        public void SetUp()
-        {
-            //Drop all data from the database
-            _daemon.Execute("db.clients.drop()");
-            _daemon.Execute("db.getCollection('_migrations').drop()");
+        public void SetUp() {
+            _daemon = MongoDaemon.Prepare();
+
+            var db = new MongoClient(_daemon.ConnectionString).GetDatabase(_daemon.DatabaseName);
             //Create test collection with some data
-            _daemon.Execute("db.createCollection('clients')");
-            _daemon.Execute("db.clients.insertMany([{name:'Alex', age: 17},{name:'Max', age: 25}])");
+            db.CreateCollection("clients");
+            db.GetCollection<BsonDocument>("clients")
+              .InsertMany(new[]{
+                   new BsonDocument{ {"name", "Alex"}, {"age", 17}},
+                   new BsonDocument{ {"name", "Max"}, {"age", 25}}
+               });
 
             //Run up to the latest migration
             new MigrationEngine()
                 .UseDatabase(_daemon.ConnectionString, _daemon.DatabaseName)
-                .UseAssemblyOfType<MongoDaemon>()
+                .UseAssembly(Assembly.GetExecutingAssembly())
                 .UseSchemeValidation(false)
                 .Run();
         }
@@ -42,7 +43,7 @@ namespace MongoDBMigrations.SmokeTests
             var downTarget = new Version("1.0.0");
             var downMigrationResult = new MigrationEngine()
                 .UseDatabase(_daemon.ConnectionString, _daemon.DatabaseName)
-                .UseAssemblyOfType<MongoDaemon>()
+                .UseAssembly(Assembly.GetExecutingAssembly())
                 .UseSchemeValidation(false)
                 .Run(downTarget);
 
@@ -51,7 +52,7 @@ namespace MongoDBMigrations.SmokeTests
 
             var upMigrationResult = new MigrationEngine()
                 .UseDatabase(_daemon.ConnectionString, _daemon.DatabaseName)
-                .UseAssemblyOfType<MongoDaemon>()
+                .UseAssembly(Assembly.GetExecutingAssembly())
                 .UseSchemeValidation(false)
                 .Run();
 

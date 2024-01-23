@@ -11,6 +11,7 @@ using MongoDBMigrations.Document;
 using Renci.SshNet;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
+using MongoDBMigrations.Core.Contracts;
 
 namespace MongoDBMigrations
 {
@@ -32,7 +33,8 @@ namespace MongoDBMigrations
         private bool _schemeValidationNeeded;
         private string _migrationProjectLocation;
         private CancellationToken _token;
-        private IList<Action<InterimMigrationResult>> _progressHandlers;
+        private readonly IList<Action<InterimMigrationResult>> _progressHandlers = new List<Action<InterimMigrationResult>>();
+        private bool _useTransaction;
 
         private SshConfig _sshConfig;
         private SslSettings _tlsSettings;
@@ -61,6 +63,11 @@ namespace MongoDBMigrations
                 _locator = new MigrationManager(),
                 _status = new DatabaseManager(database, emulation)
             };
+        }
+
+        public ILocator UseTransaction() {
+            _useTransaction = true;
+            return this;
         }
 
         private MigrationEngine EstablishConnectionViaSsh(SshClient client, ServerAdressConfig mongoAdress)
@@ -109,9 +116,6 @@ namespace MongoDBMigrations
             if (action == null)
                 throw new ArgumentNullException(nameof(action));
 
-            if (this._progressHandlers == null)
-                this._progressHandlers = new List<Action<InterimMigrationResult>>();
-
             this._progressHandlers.Add(action);
 
             return this;
@@ -158,53 +162,49 @@ namespace MongoDBMigrations
                 }
 
                 int counter = 0;
+                var session = _useTransaction ? (IMigrationSession) new MongoMigrationSession(_database.Client) : new SimpleMigrationSession();
+                
+                using (var transaction = session.BeginTransaction()) {
+                    var context = new MigrationContext(_database, transaction.Session, _token);
+                    foreach (var m in migrations) {
+                        if (_token.IsCancellationRequested) {
+                            result.Success = false;
+                            _token.ThrowIfCancellationRequested();
+                        }
 
-                foreach (var m in migrations)
-                {
-                    if (_token.IsCancellationRequested)
-                    {
-                        _token.ThrowIfCancellationRequested();
-                    }
+                        counter++;
+                        var increment = new InterimMigrationResult();
 
-                    counter++;
-                    var increment = new InterimMigrationResult();
+                        try {
+                            if (isUp)
+                                m.Up(context);
+                            else
+                                m.Down(context);
 
-                    try
-                    {
-                        if (isUp)
-                            m.Up(_database);
-                        else
-                            m.Down(_database);
+                            var insertedMigration = _status.SaveMigration(m, isUp, transaction.Session);
 
-                        var insertedMigration = _status.SaveMigration(m, isUp);
-
-                        increment.MigrationName = insertedMigration.Name;
-                        increment.TargetVersion = insertedMigration.Ver;
-                        increment.ServerAdress = result.ServerAdress;
-                        increment.DatabaseName = result.DatabaseName;
-                        increment.CurrentNumber = counter;
-                        increment.TotalCount = migrations.Count;
-                        result.InterimSteps.Add(increment);
-                    }
-                    catch (Exception ex)
-                    {
-                        result.Success = false;
-                        throw new InvalidOperationException("Something went wrong during migration", ex);
-                    }
-                    finally
-                    {
-                        if (_progressHandlers != null && _progressHandlers.Any())
-                        {
-                            foreach (var action in _progressHandlers)
-                            {
+                            increment.MigrationName = insertedMigration.Name;
+                            increment.TargetVersion = insertedMigration.Ver;
+                            increment.ServerAdress = result.ServerAdress;
+                            increment.DatabaseName = result.DatabaseName;
+                            increment.CurrentNumber = counter;
+                            increment.TotalCount = migrations.Count;
+                            result.InterimSteps.Add(increment);
+                        }
+                        catch (Exception ex) {
+                            result.Success = false;
+                            throw new InvalidOperationException("Something went wrong during migration", ex);
+                        }
+                        finally {
+                            foreach (var action in _progressHandlers) {
                                 action(increment);
                             }
+                            result.CurrentVersion = _status.GetVersion();
                         }
-                        result.CurrentVersion = _status.GetVersion();
                     }
+                    transaction.Commit(_token);
                 }
                 return result;
-
             }
             finally
             {
@@ -216,23 +216,13 @@ namespace MongoDBMigrations
             }
         }
 
-        public MigrationResult Run(Version version)
-        {
-            if (object.ReferenceEquals(version, null))
-            {
-                version = this._locator.GetNewestLocalVersion();
-            }
-
-            if (_token == null || !_token.CanBeCanceled)
-            {
-                return RunInternal(version);
-            }
-            else
-            {
-                return Task.Factory.StartNew(() => RunInternal(version), _token).ConfigureAwait(false).GetAwaiter()
-                    .GetResult();
-            }
-        }
+        public MigrationResult Run(Version version) =>
+            _token.CanBeCanceled
+                ? Task.Factory.StartNew(() => RunInternal(version), _token)
+                      .ConfigureAwait(false)
+                      .GetAwaiter()
+                      .GetResult()
+                : RunInternal(version);
 
         public MigrationResult Run()
         {
@@ -264,9 +254,6 @@ namespace MongoDBMigrations
 
         public IMigrationRunner UseCancelationToken(CancellationToken token)
         {
-            if (token == null)
-                throw new ArgumentNullException(nameof(token));
-
             if (!token.CanBeCanceled)
                 throw new ArgumentException($"Invalid token or it's canceled already.", nameof(token));
             this._token = token;
