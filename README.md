@@ -1,194 +1,602 @@
+# AdaskoTheBeAsT.MongoDbMigrations
 
-# MongoDBMigrations [![NuGet](https://img.shields.io/badge/nuget%20package-v2.2.0-brightgreen.svg)](https://www.nuget.org/packages/MongoDBMigrations/)
+[![NuGet](https://img.shields.io/nuget/v/AdaskoTheBeAsT.MongoDbMigrations.svg)](https://www.nuget.org/packages/AdaskoTheBeAsT.MongoDbMigrations/)
 
-You can support me in the development of this useful library. I have big plans you can find them in todo below. I will appreciate pizza and beer;)
-
-[Just follow the link, and donate me any amount you want :)](https://send.monobank.ua/PRwBX6QKN)
-
-MongoDBMigrations using the official [MongoDB C# Driver](https://github.com/mongodb/mongo-csharp-driver) to migrate your documents in database. This library supports on-premis Mongo instances, Azure CosmosDB (MongoAPI) and AWS DocumentDB.
+A MongoDB migration library using the official [MongoDB C# Driver](https://github.com/mongodb/mongo-csharp-driver) to migrate your documents in database. This library supports on-premises MongoDB instances, Azure CosmosDB (MongoDB API), and AWS DocumentDB.
 
 No more downtime for schema-migrations. Just write small and simple `migrations`.
 
-We need migrations when:
+## Package Structure (v3.x)
 
-**1.** Rename collections
+The library is split into three NuGet packages for optimal deployment:
 
-**2.** Rename keys
+| Package | Purpose | When to Reference |
+|---------|---------|-------------------|
+| `AdaskoTheBeAsT.MongoDbMigrations.Abstractions` | `IMigration`, `Version`, `MigrationContext` | Migration class projects |
+| `AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators` | Compile-time migration registry generator | Migration class projects |
+| `AdaskoTheBeAsT.MongoDbMigrations` | `MigrationEngine`, runtime execution | Application startup/runner |
 
-**3.** Manipulate data types
+### Typical Setup
 
-**4.** Index manipulation
-
-**5.** Removing collections / data
-
-  
-
-### New Features!
-- Added: SSH support
-- Added: TLS/SSL support (experimental feature)
-- Added: Custom specification collection name
-- Added: New overload for the method `UseDatabase`
-- Changed: Upgraded to the newest version of .NET Mongo Driver
-- Chnaged: Fixed [list of bugs](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/issues?version=v2.1.0)
-
--  [See more...](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/src/master/ReleaseNotes.md)
-
-### Contribution
-Guys, unfortunately, I can't spend much time on this project, that is way **since now you are able to create a pull request** and develop some features, which can be useful. I will review that requests and merge them. Please don't forget about unit tests :joy: I hope this step will speed up the evolution of this project. And just to set a vector below I specified a list of preferred features for the community:
-
-- Support replicas
-- Migration inside transsaction
-- Check the availability to work with Mongo Atlas
-- Extend functionality for scheme validator (base implementation is already in place)
-
-### Next Feature/Todo
-- Diff calculation
-- Detailed migration report
-- Auto generated migrations
-
-### Installation
-MongoDBMigrations tested with .NET Core 2.0+
-https://www.nuget.org/packages/MongoDBMigrations/
-
+**In your migrations project** (class library with migration classes):
+```xml
+<ItemGroup>
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations.Abstractions" Version="3.0.0" />
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators" Version="3.0.0" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+</ItemGroup>
 ```
 
-PM> Install-Package MongoDBMigrations -Version 2.2.0
-
+**In your application** (where migrations are executed):
+```xml
+<ItemGroup>
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations" Version="3.0.0" />
+  <ProjectReference Include="..\YourMigrations\YourMigrations.csproj" />
+</ItemGroup>
 ```
 
-### How to use
+## Source Generator Architecture
 
-Create a migration by implementing the interface `IMigration`. The best practice for the version is to use [Semantic Versioning](http://semver.org/) but ultimately it is up to you. You could simply use the patch version to count the number of migrations. If there is a duplicate for a specific type an exception is thrown on initialization.
+This library uses **compile-time source generators** instead of runtime Roslyn analysis, providing significant advantages:
 
-This is a simple migration template. Method Up is used to migrate your database forward and Down to rollback thus these methods must do the opposite things. Please keep it in mind. You can use any version number greater than `0.0.0`. In case you already have some migrations you should choose a version upper than the existing ones.
+### Why Source Generators?
 
-  
+| Aspect | Original Approach (Runtime Roslyn) | Source Generator Approach |
+|--------|-----------------------------------|---------------------------|
+| **Package Size** | ~8MB (Microsoft.CodeAnalysis) | Minimal overhead |
+| **Startup Time** | Slow (parses project at runtime) | Fast (pre-computed at compile) |
+| **AOT Compatible** | No (heavy reflection) | Yes |
+| **Error Detection** | Runtime failures | Compile-time errors |
+| **Collection Names** | Parsed from source at runtime | Pre-extracted during build |
+
+### How It Works
+
+1. **At Compile Time**: The source generator scans your migration classes, extracts version info, names, and MongoDB collection names used in `UpAsync`/`DownAsync` methods.
+
+2. **Generated Registry**: A `MigrationRegistry` class is automatically generated containing all migration metadata:
 
 ```csharp
-
-//Create migration
-
-public  class  MyTestMigration : IMigration
-
+// Auto-generated at compile time in AdaskoTheBeAsT.MongoDbMigrations.Generated namespace
+[GeneratedMigrationRegistry]
+public static class MigrationRegistry
 {
-
-public MongoDBMigrations.Version Version => new MongoDBMigrations.Version(1, 1, 0);
-
-public  string  Name => "Some descrioption about this migration.";
-
-public  void  Up(IMongoDatabase  database)
-
-{
-
-// ...
-
+    public static IReadOnlyList<MigrationDescriptor> GetAllMigrations() => ...
 }
-
-public  void  Down(IMongoDatabase  database)
-
-{
-
-// ...
-
-}
-
-}
-
 ```
 
-#### It is really easy to use this library, just follow all these steps below (you should use *one or more* methods from each step):
-|Step #0|Step #1|Step #2|Step #3|Step #4|Step #5|
-|:---|:---|:---|:---|:---|:---|
-|Create an engine|Database, connection features|Migration classes| Validations|Hadling features|Excecution
-|`new MigrationEngine()`|`UseSshTunnel(...)` `UseTls(...)` `UseDatabase(...)`|`UseAssemblyOfType(...)` `UseAssemblyOfType<T>()` `UseAssembly(...)`|`UseSchemeValidation(...)`| `UseProgressHandler(...)` `UseCancelationToken(...)` `UseCustomSpecificationCollectionName(...)`|`Run()`|
+3. **At Runtime**: The `MigrationManager` automatically discovers and uses the generated registry, resulting in faster startup and smaller deployment size.
 
+### What Gets Generated
 
-Use the following code for initialize `MigrationEngine` and start migration.
+For each migration class like:
 
 ```csharp
+public class AddUserIndex : IMigration
+{
+    public Version Version => new Version(1, 0, 0);
+    public string Name => "Add index to users";
 
-new  MigrationEngine()
+    public async Task UpAsync(MigrationContext context)
+    {
+        var users = context.Database.GetCollection<BsonDocument>("users");
+        await users.Indexes.CreateOneAsync(...);
+    }
 
-.UseSshTunnel(sshServerAdress, user, privateKeyFileStream, mongoAdress, keyFilePassPhrase) //Use if you want to connect to your DB via SSH tunel. keyFilePassPhrase is optional.
-
-.UseTls(cert) //Use if your database requires TLS. Please use X509Certificate2 instance as a cert value
-
-.UseDatabase(connectionString, databaseName) //Required to use specific db
-
-.UseAssembly(assemblyWithMigrations) //Required
-
-.UseSchemeValidation(bool, string) //Optional if you want to ensure that all documents in collections, that will be affected in the current run, has a consistent structure. Set a true and absolute path to *.csproj file with migration classes or just false.
-
-.UseCancelationToken(token) //Optional if you wanna have the possibility to cancel the migration process. Might be useful when you have many migrations and some interaction with the user.
-
-.UseProgressHandler(Action<> action) // Optional some delegate that will be called each migration
-
-.Run(targetVersion) // Execution call. Might be called without targetVersion, in that case, the engine will choose the latest available version.
-
+    public async Task DownAsync(MigrationContext context)
+    {
+        var users = context.Database.GetCollection<BsonDocument>("users");
+        await users.Indexes.DropOneAsync(...);
+    }
+}
 ```
 
-**In case if the handler does not found and validation has failed** - migration process will be canceled automatically.
-If you haven't tested your migration yet, mark it with `IgnoreMigration` attribute, and the runner will skip it.
-You can't check if the database is outdated by dint of static class `MongoDatabaseStateChecker`
+The generator creates a `MigrationDescriptor` with:
+- Type reference (`typeof(AddUserIndex)`)
+- Version (`1.0.0`)
+- Name (`"Add index to users"`)
+- Up collections (`["users"]`)
+- Down collections (`["users"]`)
 
-  
+### Benefits
 
-| Method | Description |
-| :--- | :--- |
-| `ThrowIfDatabaseOutdated(connectionString, databaseName, migrationAssambly, emulation)` | Check is DB outdated and throw `DatabaseOutdatedExcetion` if yes. MigrationAssambly is optional. If not set method will find migration in executing assembly. Emulation has a `None` value by default for Mongo databases, but you should use the `AzureCosmos` option in case of Azure Cosmos DB |
-|`IsDatabaseOutdated(connectionString, databaseName, migrationAssambly, emulation)`|Returns `true` if DB outdated (you have unapplied migrations) otherwise `false`. MigrationAssambly is optional. If not set method will find migration in executing assembly. Emulation has a `None` value by default for Mongo databases, but you should use the `AzureCosmos` option in case of Azure Cosmos DB|
+- **Smaller Package**: No need to ship Microsoft.CodeAnalysis assemblies (~8MB reduction)
+- **Faster Startup**: Migration discovery is instant (no project parsing)
+- **AOT/Native AOT Ready**: Works with .NET Native AOT compilation
+- **Better Diagnostics**: Duplicate version numbers are detected at compile time
+- **Schema Validation**: Collection names are pre-extracted for schema validation without runtime source analysis
 
-  
+## When to Use Migrations
 
-#### Azure CosmosDB support
-Begins from `v2.1.0` this library supports databases in Azure CosmosDB service. There might be two cases:
-* You haven't use this library before. No manual action needed, everithing will work ok.
-* You already have some executed migrations with earlier version of this library. In this case you should ensure that you have an ascending index for filed `applied` in `_migrations` collection. If you don't have this index please create them prior you strart the migration run.
+1. Rename collections
+2. Rename keys
+3. Manipulate data types
+4. Index manipulation
+5. Removing collections/data
 
-#### AWS DocumentDB support
-Bagins from `v2.2.0` this library supports databases in AWS DocumentDB service.
+## Installation
 
-  
-
-#### CI/CD
-Now you have a chance to integrate the mongo database migration engine in your CI pipeline. In repository you can found `MongoDBRunMigration.ps1` script. This approach allows you to have some backup rollback in case of any failure during migration.
-
-Call the following commands prior to using this PS1 file:
-
-```ps1
-
-Set-Alias mongodump <path_without_spaces>
-
-Set-Alias mongorestore <path_without_spaces>
-
+```bash
+PM> Install-Package AdaskoTheBeAsT.MongoDbMigrations
 ```
 
-Paths should lead to executable files (*.exe). Please, modify the PS1 file if you have any authorization in your database.
+Supports:
+- .NET Framework 4.7.2, 4.8, 4.8.1
+- .NET 8.0, 9.0, 10.0
 
-  
+## Quick Start
 
-|Parameter|Description|
-|:---|:---|
-|connectionString|Database connection string e.g. localhost:27017|
-|databaseName|Name of the database|
-|backupLocation|Folder for the backup that will be created befor migration|
-|migrationsAssemblyPath|Path to the assembly with migration classes|
+### 1. Create a Migration
 
+All migrations are async to match MongoDB driver patterns:
 
-----
-Tips
+```csharp
+using System.Threading.Tasks;
+using AdaskoTheBeAsT.MongoDbMigrations.Abstractions;
+using MongoDB.Bson;
+using MongoDB.Driver;
 
-1. Use **{migrationVerstion}_{migrationName}.cs** pattern of you migration classes.
-2. Save your migrations in non-production assemblies and use the method `LookInAssemblyOfType<T>()` of `MigratiotionLocator` to finding them.
-3. Keep migrations as simple as possible
-4. Do not couple migrations to your domain types, they will be brittle to change, and the point of migration is to update the data representation when your model changes.
-5. Stick to the mongo BsonDocument interface or use javascript based mongo commands for migrations, much like with SQL, the mongo javascript API is less likely to change which might break migrations
-6. Add an application startup check that the database is at the correct version
-7. Write tests of your migrations, TDD them from existing data scenarios to new forms. Use `IgnoreMigration`attribute while WIP.
-8. Automate the deployment of migrations
+public class AddIndexToUsers : IMigration
+{
+    public Version Version => new Version(1, 0, 0);
+    
+    public string Name => "Add index to users collection";
 
-----
-License
-MongoDbMigrations is licensed under [MIT](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/src/master/MIT.md  "Read more about the MIT license form"). Refer to license.txt for more information.
+    public async Task UpAsync(MigrationContext context)
+    {
+        var collection = context.Database.GetCollection<BsonDocument>("users");
+        var indexKeys = Builders<BsonDocument>.IndexKeys.Ascending("email");
+        await collection.Indexes.CreateOneAsync(
+            new CreateIndexModel<BsonDocument>(indexKeys),
+            cancellationToken: context.CancellationToken);
+    }
 
-**Free Software, Hell Yeah!**
+    public async Task DownAsync(MigrationContext context)
+    {
+        var collection = context.Database.GetCollection<BsonDocument>("users");
+        await collection.Indexes.DropOneAsync("email_1", context.CancellationToken);
+    }
+}
+```
+
+### 2. Run Migrations
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName);
+    
+var result = await engine
+    .UseAssembly(Assembly.GetExecutingAssembly())
+    .UseSchemeValidation(false)
+    .RunAsync();
+```
+
+## API Reference
+
+### Configuration Methods
+
+| Step | Methods | Description |
+|:-----|:--------|:------------|
+| 0 | `new MigrationEngineBuilder()` | Create engine builder instance |
+| 1 | `UseSshTunnel(...)`, `UseTls(...)`, `UseDatabase(...)` | Database connection |
+| 2 | `UseAssemblyOfType(...)`, `UseAssemblyOfType<T>()`, `UseAssembly(...)` | Migration classes location |
+| 3 | `UseSchemeValidation(...)` | Schema validation |
+| 4 | `UseProgressHandler(...)`, `UseDryRun(...)`, `UseBeforeMigration(...)`, `UseAfterMigration(...)` | Handling features |
+| 5 | `RunAsync()`, `RunAsync(version)`, `RollbackAsync(steps)` | Execution |
+
+### Full Example
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseSshTunnel(sshServerAddress, user, privateKeyFileStream, mongoAddress, keyFilePassPhrase) // Optional: SSH tunnel
+    .UseTls(cert) // Optional: TLS/SSL
+    .UseDatabase(connectionString, databaseName); // Required
+
+var result = await engine
+    .UseAssembly(assemblyWithMigrations) // Required
+    .UseSchemeValidation(true, pathToCsproj) // Optional: Schema validation
+    .UseProgressHandler(result => Console.WriteLine(result.MigrationName)) // Optional: Progress callback
+    .UseBeforeMigration(migration => Console.WriteLine($"Starting: {migration.Name}")) // Optional: Before hook
+    .UseAfterMigration((migration, success) => Console.WriteLine($"Completed: {migration.Name}")) // Optional: After hook
+    .RunAsync(targetVersion, cancellationToken); // Execute (version and token are optional)
+```
+
+### Database State Checker
+
+```csharp
+// Check if database needs migrations
+bool isOutdated = MongoDatabaseStateChecker.IsDatabaseOutdated(
+    connectionString, 
+    databaseName, 
+    migrationAssembly,
+    MongoEmulation.None);
+
+// Throw exception if outdated
+MongoDatabaseStateChecker.ThrowIfDatabaseOutdated(
+    connectionString, 
+    databaseName, 
+    migrationAssembly);
+```
+
+## Migration Guide from v2.x to v3.x
+
+### Breaking Changes
+
+#### 1. Package Structure Change (New in v3.x)
+
+Version 3.x splits the library into three packages:
+
+| v2.x | v3.x |
+|------|------|
+| `AdaskoTheBeAsT.MongoDbMigrations` (single package) | `AdaskoTheBeAsT.MongoDbMigrations.Abstractions` (interfaces) |
+| | `AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators` (compile-time) |
+| | `AdaskoTheBeAsT.MongoDbMigrations` (runtime engine) |
+
+**Update your project references:**
+
+```xml
+<!-- In migration class library -->
+<ItemGroup>
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations.Abstractions" Version="3.0.0" />
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators" Version="3.0.0" 
+                    OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+</ItemGroup>
+
+<!-- In application that runs migrations -->
+<ItemGroup>
+  <PackageReference Include="AdaskoTheBeAsT.MongoDbMigrations" Version="3.0.0" />
+</ItemGroup>
+```
+
+#### 2. Source Generator Architecture (New in v3.x)
+
+Version 3.x introduces a source generator that replaces runtime Roslyn analysis. This means:
+- **Smaller deployments**: No more ~8MB Microsoft.CodeAnalysis dependency at runtime
+- **Faster startup**: Migration discovery is instant
+- **Compile-time validation**: Duplicate version numbers are caught during build
+
+The source generator automatically creates a `MigrationRegistry` class in your assembly. No action required - it works transparently.
+
+#### 3. Async API (Most Important)
+
+All `Run()` methods have been replaced with async versions:
+
+**Before (v2.x):**
+```csharp
+var result = new MigrationEngine()
+    .UseDatabase(connectionString, databaseName)
+    .UseAssembly(assembly)
+    .UseSchemeValidation(false)
+    .Run(targetVersion);
+```
+
+**After (v3.x):**
+```csharp
+var result = await new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName)
+    .UseAssembly(assembly)
+    .UseSchemeValidation(false)
+    .RunAsync(targetVersion);
+```
+
+#### 4. Migration Interface Change
+
+The `Up` and `Down` methods are now async and receive `MigrationContext` instead of `IMongoDatabase`:
+
+**Before (v2.x):**
+```csharp
+public class MyMigration : IMigration
+{
+    public Version Version => new Version(1, 0, 0);
+    public string Name => "My migration";
+
+    public void Up(IMongoDatabase database)
+    {
+        database.GetCollection<BsonDocument>("users").InsertOne(...);
+    }
+
+    public void Down(IMongoDatabase database)
+    {
+        database.GetCollection<BsonDocument>("users").DeleteOne(...);
+    }
+}
+```
+
+**After (v3.x):**
+```csharp
+public class MyMigration : IMigration
+{
+    public Version Version => new Version(1, 0, 0);
+    public string Name => "My migration";
+
+    public async Task UpAsync(MigrationContext context)
+    {
+        await context.Database.GetCollection<BsonDocument>("users")
+            .InsertOneAsync(..., cancellationToken: context.CancellationToken);
+        // Also available: context.Session (for transactions)
+    }
+
+    public async Task DownAsync(MigrationContext context)
+    {
+        await context.Database.GetCollection<BsonDocument>("users")
+            .DeleteOneAsync(..., cancellationToken: context.CancellationToken);
+    }
+}
+```
+
+**`MigrationContext` provides:**
+- `Database` - The `IMongoDatabase` instance
+- `Session` - Optional `IClientSessionHandle` for transaction support
+- `CancellationToken` - Token for cancellation support
+
+#### 5. Namespace Changes
+
+The package namespace has changed from `MongoDBMigrations` to `AdaskoTheBeAsT.MongoDbMigrations`:
+
+**Before:**
+```csharp
+using MongoDBMigrations;
+```
+
+**After:**
+```csharp
+using AdaskoTheBeAsT.MongoDbMigrations;
+using AdaskoTheBeAsT.MongoDbMigrations.Abstractions;
+```
+
+#### 6. Version Class Location
+
+The `Version` class moved to the Abstractions package:
+
+**Before:**
+```csharp
+using MongoDBMigrations;
+// Version was in main namespace
+```
+
+**After:**
+```csharp
+using Version = AdaskoTheBeAsT.MongoDbMigrations.Abstractions.Version;
+// Or use fully qualified name to avoid conflict with System.Version
+```
+
+#### 7. MigrationEngine to MigrationEngineBuilder
+
+The `MigrationEngine` class is now created via `MigrationEngineBuilder`:
+
+**Before (v2.x):**
+```csharp
+var result = new MigrationEngine()
+    .UseDatabase(...)
+    .Run();
+```
+
+**After (v3.x):**
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(...);
+var result = await engine.RunAsync();
+```
+
+Note: The engine now implements `IDisposable` and should be disposed after use.
+
+### Migration Checklist
+
+- [ ] Update NuGet packages to v3.x (add all three packages as needed)
+- [ ] Add `OutputItemType="Analyzer" ReferenceOutputAssembly="false"` to SourceGenerators reference
+- [ ] Update all `using` statements to new namespaces
+- [ ] Add `using Version = AdaskoTheBeAsT.MongoDbMigrations.Abstractions.Version;` if needed
+- [ ] Change `MigrationEngine` to `MigrationEngineBuilder`
+- [ ] Change all `Run()` calls to `await RunAsync()`
+- [ ] Update migration classes:
+  - [ ] Change `Up(IMongoDatabase database)` to `async Task UpAsync(MigrationContext context)`
+  - [ ] Change `Down(IMongoDatabase database)` to `async Task DownAsync(MigrationContext context)`
+  - [ ] Replace `database.` with `context.Database.`
+  - [ ] Add `cancellationToken: context.CancellationToken` to async MongoDB operations
+- [ ] Update test methods to be `async Task`
+- [ ] Add `using` statement or `Dispose()` call for `MigrationEngineBuilder`
+
+### Complete Migration Example
+
+**v2.x Migration Class:**
+```csharp
+using MongoDBMigrations;
+using MongoDB.Bson;
+using MongoDB.Driver;
+
+public class AddEmailIndex : IMigration
+{
+    public Version Version => new Version("1.0.0");
+    public string Name => "Add email index";
+
+    public void Up(IMongoDatabase database)
+    {
+        var collection = database.GetCollection<BsonDocument>("users");
+        var keys = Builders<BsonDocument>.IndexKeys.Ascending("email");
+        collection.Indexes.CreateOne(new CreateIndexModel<BsonDocument>(keys));
+    }
+
+    public void Down(IMongoDatabase database)
+    {
+        var collection = database.GetCollection<BsonDocument>("users");
+        collection.Indexes.DropOne("email_1");
+    }
+}
+```
+
+**v3.x Migration Class:**
+```csharp
+using System.Threading.Tasks;
+using AdaskoTheBeAsT.MongoDbMigrations.Abstractions;
+using MongoDB.Bson;
+using MongoDB.Driver;
+
+public class AddEmailIndex : IMigration
+{
+    public Version Version => new Version(1, 0, 0);
+    public string Name => "Add email index";
+
+    public async Task UpAsync(MigrationContext context)
+    {
+        var collection = context.Database.GetCollection<BsonDocument>("users");
+        var keys = Builders<BsonDocument>.IndexKeys.Ascending("email");
+        await collection.Indexes.CreateOneAsync(
+            new CreateIndexModel<BsonDocument>(keys),
+            cancellationToken: context.CancellationToken);
+    }
+
+    public async Task DownAsync(MigrationContext context)
+    {
+        var collection = context.Database.GetCollection<BsonDocument>("users");
+        await collection.Indexes.DropOneAsync("email_1", context.CancellationToken);
+    }
+}
+```
+
+**v2.x Runner:**
+```csharp
+var result = new MigrationEngine()
+    .UseDatabase(connectionString, databaseName)
+    .UseAssembly(typeof(AddEmailIndex).Assembly)
+    .UseSchemeValidation(false)
+    .Run();
+```
+
+**v3.x Runner:**
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName);
+var result = await engine
+    .UseAssembly(typeof(AddEmailIndex).Assembly)
+    .UseSchemeValidation(false)
+    .RunAsync();
+```
+
+## Azure CosmosDB Support
+
+For Azure CosmosDB (MongoDB API), use the `MongoEmulation.AzureCosmos` option:
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName, MongoEmulation.AzureCosmos);
+    
+var result = await engine
+    .UseAssembly(assembly)
+    .RunAsync();
+```
+
+**Note:** If you already have migrations from an earlier version, ensure you have an ascending index on the `applied` field in the `_migrations` collection.
+
+## AWS DocumentDB Support
+
+AWS DocumentDB is supported out of the box.
+
+## CI/CD Integration
+
+Use the `AdaskoTheBeAsT.MongoDbMigrations.ps1` script for CI/CD pipelines. This allows backup and rollback on failure.
+
+```powershell
+Set-Alias mongodump <path_to_mongodump>
+Set-Alias mongorestore <path_to_mongorestore>
+```
+
+| Parameter | Description |
+|:----------|:------------|
+| `connectionString` | Database connection string |
+| `databaseName` | Name of the database |
+| `backupLocation` | Folder for backup |
+| `migrationsAssemblyPath` | Path to assembly with migrations |
+
+## Best Practices
+
+1. Use `{version}_{migrationName}.cs` naming pattern (e.g., `1_0_0_AddUserIndex.cs`)
+2. Keep migrations in non-production assemblies
+3. Keep migrations simple and focused
+4. Don't couple migrations to domain types
+5. Use `BsonDocument` or MongoDB JavaScript API
+6. Add application startup check for database version
+7. Write tests for migrations using `IgnoreMigration` attribute during development
+8. Automate migration deployment
+
+## Transaction Support
+
+Enable transaction support for migration batches:
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName)
+    .UseTransaction();
+    
+var result = await engine
+    .UseAssembly(assembly)
+    .RunAsync();
+```
+
+**Note:** Transaction support requires MongoDB 4.0+ with replica set or sharded cluster.
+
+## Rollback Support
+
+Rollback migrations by a specified number of steps:
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName);
+    
+// Rollback 2 migration steps
+var result = await engine
+    .UseAssembly(assembly)
+    .RollbackAsync(2);
+```
+
+## Dry Run Mode
+
+Test migrations without applying changes:
+
+```csharp
+using var engine = new MigrationEngineBuilder()
+    .UseDatabase(connectionString, databaseName);
+    
+var result = await engine
+    .UseAssembly(assembly)
+    .UseDryRun(true)
+    .RunAsync(targetVersion);
+
+// result.IsDryRun will be true
+// No changes are applied to the database
+```
+
+## Acknowledgments
+
+This library is based on the excellent work of:
+
+- **[Artur Osmokiesku](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/)** - Original author of the MongoDBMigrations library
+- **[Ruxo Zheng (ruxo)](https://github.com/ruxo/MongoDbMigrations)** - Maintainer of the MongoDBMigrationsRZ fork with .NET updates and session support
+
+### Why This Fork?
+
+While the original MongoDBMigrations library is excellent, it has some limitations that this fork addresses:
+
+| Aspect | Original Library | This Library (v3.x) |
+|--------|------------------|---------------------|
+| **Migration Discovery** | Runtime Roslyn analysis (~8MB dependency) | Compile-time source generators |
+| **Package Size** | Large (includes Microsoft.CodeAnalysis) | Minimal (no CodeAnalysis at runtime) |
+| **Startup Time** | Slow (parses source files at runtime) | Fast (pre-computed at build) |
+| **AOT Compatibility** | Not compatible | Fully compatible with Native AOT |
+| **Error Detection** | Runtime failures | Compile-time diagnostics |
+| **API Style** | Synchronous | Fully async/await |
+| **Transaction Support** | Limited | Full session/transaction support via MigrationContext |
+| **Cancellation** | Not supported | Built-in CancellationToken support |
+
+### Key Innovations
+
+1. **Source Generator Architecture**: Collection names, versions, and migration metadata are extracted at compile time, eliminating the need for runtime Roslyn analysis.
+
+2. **Modern Async API**: All migration methods use `async Task` patterns, allowing proper async/await usage with MongoDB driver operations.
+
+3. **MigrationContext**: Provides access to `IMongoDatabase`, `IClientSessionHandle` (for transactions), and `CancellationToken` in a single context object.
+
+4. **Package Separation**: Split into three packages (Abstractions, SourceGenerators, Runtime) for optimal deployment scenarios.
+
+Thank you to the original authors for creating such a useful library for the .NET MongoDB community!
+
+## License
+
+Licensed under [MIT](LICENSE).

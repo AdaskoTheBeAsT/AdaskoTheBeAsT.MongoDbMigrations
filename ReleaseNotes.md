@@ -1,65 +1,58 @@
-# MongoDBMigrations
+# AdaskoTheBeAsT.MongoDbMigrations Release Notes
 
-### v2.2.0
-  - Added: SSH support
-  - Added: TLS/SSL support (experimental feature)
-  - Added: Custom specification collection name
-  - Added: New overloads for the method `UseDatabase`
-  - Changed: Upgrade to the newest version of .NET Mongo Driver
-  - Chnaged: Fixed [list of bugs](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/issues?version=v2.1.0)
+## v3.0.0
 
-### v2.1.0
-  - Added: Azure CosmosDB support
-  - Added: Increased C# Mongo Driver API coverage in schema validator feature
-  - Changed: Fixed CI/CD script
-  - Changed: Updated dependencies
-  - Changed: Fixed [list of bugs](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/issues?version=v2.0.0)
+### Breaking Changes
 
-***
+- **Package Split**: Library split into three packages for optimal deployment:
+  - `AdaskoTheBeAsT.MongoDbMigrations.Abstractions` - Interfaces and types (`IMigration`, `Version`, `MigrationContext`)
+  - `AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators` - Compile-time migration registry generator
+  - `AdaskoTheBeAsT.MongoDbMigrations` - Runtime migration engine
 
-### v2.0.0
-  - Added: Totaly brand new fluent API
-  - Added: Callback for steps
-  - Added: On-flight cancelation
-  - Added: PowerShell script that can be integrated in CI/CD flow to make migration
-  - Removed: All obsolete APIs
-  - Removed: Async version of methods
-  - Removed: Confiramtion event in case of failed database scheeme validation (Now if validations failed migration process will be stoped)
-  - Fixed: Some amount of bugs
-  - Fixed: All test has been refactored to increase quality of library.
+- **Source Generator Architecture**: Replaced runtime Roslyn analysis with compile-time source generators
+  - Eliminates ~8MB Microsoft.CodeAnalysis runtime dependency
+  - Migration metadata extracted at build time
+  - Duplicate version detection at compile time
+  - Native AOT compatible
 
-***
+- **Async API**: All synchronous methods replaced with async equivalents
+  - `Run()` → `RunAsync()`
+  - `Up(IMongoDatabase)` → `UpAsync(MigrationContext)`
+  - `Down(IMongoDatabase)` → `DownAsync(MigrationContext)`
 
-### v1.1.2
-  - Added: Ignore migration attribute
-  - Fixed: Supporting migrations with version less then 1.0.0
-  - Fixed: Critical bugs
+- **MigrationContext**: New context object passed to migration methods providing:
+  - `Database` - `IMongoDatabase` instance
+  - `Session` - `IClientSessionHandle` for transaction support
+  - `CancellationToken` - For cancellation support
 
-***
+- **MigrationEngineBuilder**: `MigrationEngine` replaced with builder pattern
+  - Now implements `IDisposable`
+  - Fluent API for configuration
 
-### v1.1.1
-  - Change target framework from netcoreapp2.1 to netstandard2.0
+- **Namespace Changes**: 
+  - `MongoDBMigrations` → `AdaskoTheBeAsT.MongoDbMigrations`
+  - `Version` class moved to `AdaskoTheBeAsT.MongoDbMigrations.Abstractions`
 
-***
+### New Features
 
-### v1.1.0
-  - Added: MongoDB document schema uniformity validation
-  - Added: Async impl for runner and database locator
-  - Added: Progress returning mechanism
-  - Added: Cancelation mechanism
+- **Compile-time Migration Registry**: Auto-generated `MigrationRegistry` class with all migration metadata
+- **Collection Name Extraction**: Source generator extracts collection names from `UpAsync`/`DownAsync` methods
+- **Dry Run Mode**: Test migrations without applying changes via `UseDryRun(true)`
+- **Rollback by Steps**: `RollbackAsync(steps)` to rollback multiple migrations
+- **Migration Hooks**: `UseBeforeMigration()` and `UseAfterMigration()` callbacks
+- **Full Transaction Support**: Via `MigrationContext.Session`
+- **Cancellation Support**: Built-in `CancellationToken` in `MigrationContext`
 
-***
+### Improvements
 
-### v1.0.1
-  - Fixed: Search assemble with migrations when method `LookInAssemblyOfType<T>()` doesn't used
-  - Fixed: Runner crash when `runner.UpdateTo()` called without result handling
-  - Fixed: Behavior when target migration not found
-  - Added: Testable migrations
-  - Added: Overload for `LookInAssemblyOfType` method
-  - Added: Fields in `MigrationResult` for progress handling
+- Faster startup (no runtime source parsing)
+- Smaller deployment size (no CodeAnalysis assemblies)
+- Better error messages with compile-time diagnostics
+- Full async/await support matching MongoDB driver patterns
+- Support for .NET Framework 4.7.2, 4.8, 4.8.1 and .NET 8.0, 9.0, 10.0
 
-***
+### Acknowledgments
 
-### v1.0.0
-  - Roll forward/back manual created migrations
-  - Auto find migrations in assemblies for migration beetwen current and target versions.
+This library is based on the excellent work of:
+- [Artur Osmokiesku](https://bitbucket.org/i_am_a_kernel/mongodbmigrations/) - Original MongoDBMigrations author
+- [Ruxo Zheng](https://github.com/ruxo/MongoDbMigrations) - MongoDBMigrationsRZ fork maintainer
