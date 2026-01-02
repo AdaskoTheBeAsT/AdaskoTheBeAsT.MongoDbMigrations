@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -369,14 +369,7 @@ public sealed class MigrationEngine
                         action(increment);
                     }
 
-                    if (!_dryRun)
-                    {
-                        result.CurrentVersion = _status.GetVersion();
-                    }
-                    else
-                    {
-                        result.CurrentVersion = version;
-                    }
+                    result.CurrentVersion = !_dryRun ? _status.GetVersion() : version;
                 }
             }
 
