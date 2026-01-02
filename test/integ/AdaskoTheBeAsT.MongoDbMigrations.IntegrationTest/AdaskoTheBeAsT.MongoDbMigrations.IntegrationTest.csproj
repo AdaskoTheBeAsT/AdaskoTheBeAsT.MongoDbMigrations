@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net472;net48;net481;net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IncludeMicrosoftCodeAnalysis>true</IncludeMicrosoftCodeAnalysis>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reqnroll" Version="3.3.0" />
+    <PackageReference Include="Reqnroll.Tools.MsBuild.Generation" Version="3.3.0" />
+    <PackageReference Include="Reqnroll.xUnit" Version="3.3.0" />
+    <PackageReference Include="Testcontainers.MongoDb" Version="4.10.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\AdaskoTheBeAsT.MongoDbMigrations\AdaskoTheBeAsT.MongoDbMigrations.csproj" />
+    <ProjectReference Include="..\..\..\src\AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators\AdaskoTheBeAsT.MongoDbMigrations.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="reqnroll.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
+
+

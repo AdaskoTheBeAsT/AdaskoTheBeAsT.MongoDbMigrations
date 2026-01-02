@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Nullable>enable</Nullable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <IsSourceGenerator>true</IsSourceGenerator>
+    <Company>Adam "AdaskoTheBeAsT" Pluciński</Company>
+    <Authors>Adam "AdaskoTheBeAsT" Pluciński</Authors>
+    <Copyright>Copyright ©2025-2026 Adam "AdaskoTheBeAsT" Pluciński</Copyright>
+    <PackageProjectUrl>https://github.com/AdaskoTheBeAsT/AdaskoTheBeAsT.MongoDbMigrations</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/AdaskoTheBeAsT/AdaskoTheBeAsT.MongoDbMigrations</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Description>
+      Source generator for AdaskoTheBeAsT.MongoDbMigrations library.
+      Generates migration registry at compile time for improved performance.
+    </Description>
+    <PackageTags>mongo mongodb migration source-generator roslyn analyzers</PackageTags>
+    <Version>3.0.0</Version>
+    <PackageReleaseNotes>https://github.com/AdaskoTheBeAsT/AdaskoTheBeAsT.MongoDbMigrations/blob/master/ReleaseNotes.md</PackageReleaseNotes>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <SynchReleaseVersion>false</SynchReleaseVersion>
+    <NoWarn>$(NoWarn);RS1035;RS1036;RS2008</NoWarn>
+    <IncludeMicrosoftCodeAnalysis>true</IncludeMicrosoftCodeAnalysis>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="$(MSBuildProjectName).Test" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Remove="Microsoft.CodeAnalysis" />
+    <PackageReference Remove="Microsoft.CodeAnalysis.Common" />
+    <PackageReference Remove="Microsoft.CodeAnalysis.CSharp.Scripting" />
+    <PackageReference Remove="Microsoft.CodeAnalysis.CSharp.Workspaces" />
+    <PackageReference Remove="Microsoft.CodeAnalysis.Workspaces.Common" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+</Project>
